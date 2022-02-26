@@ -21,7 +21,7 @@ Our temporal sampler is implemented using C++, please compile the sampler first 
 
 ## Dataset
 
-The four datasets used in our paper are available to download through (to be update) link. Please unzip the file and put the `DATA` folder in the root directory.
+The four datasets used in our paper are available to download from AWS S3 bucket using the `down.sh` script. The total download size is around 350GB.
 
 To use your own dataset, you need to put the following files in the folder `\DATA\\<NameOfYourDataset>\`
 
