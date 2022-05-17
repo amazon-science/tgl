@@ -45,7 +45,7 @@ class GeneralModel(torch.nn.Module):
         if 'combine' in gnn_param and gnn_param['combine'] == 'rnn':
             self.combiner = torch.nn.RNN(gnn_param['dim_out'], gnn_param['dim_out'])
     
-    def forward(self, mfgs):
+    def forward(self, mfgs, neg_samples=1):
         if self.memory_param['type'] == 'node':
             self.memory_updater(mfgs[0])
         out = list()
@@ -63,7 +63,7 @@ class GeneralModel(torch.nn.Module):
         else:
             out = torch.stack(out, dim=0)
             out = self.combiner(out)[0][-1, :, :]
-        return self.edge_predictor(out)
+        return self.edge_predictor(out, neg_samples=neg_samples)
 
     def get_emb(self, mfgs):
         if self.memory_param['type'] == 'node':
