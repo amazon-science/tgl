@@ -8,6 +8,7 @@ parser.add_argument('--gpu', type=str, default='0', help='which GPU to use')
 parser.add_argument('--model_name', type=str, default='', help='name of stored model')
 parser.add_argument('--rand_edge_features', type=int, default=0, help='use random edge featrues')
 parser.add_argument('--rand_node_features', type=int, default=0, help='use random node featrues')
+parser.add_argument('--eval_neg_samples', type=int, default=1, help='how many negative samples to use at inference. Note: this will change the metric of test set to AP+AUC to AP+MRR!')
 args=parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -62,24 +63,25 @@ if not ('no_sample' in sample_param and sample_param['no_sample']):
 neg_link_sampler = NegLinkSampler(g['indptr'].shape[0] - 1)
 
 def eval(mode='val'):
+    neg_samples = 1
     model.eval()
     aps = list()
-    aucs = list()
+    aucs_mrrs = list()
     if mode == 'val':
         eval_df = df[train_edge_end:val_edge_end]
     elif mode == 'test':
         eval_df = df[val_edge_end:]
+        neg_samples = args.eval_neg_samples
     elif mode == 'train':
         eval_df = df[:train_edge_end]
     with torch.no_grad():
         total_loss = 0
         for _, rows in eval_df.groupby(eval_df.index // train_param['batch_size']):
-        # for _, rows in eval_df.groupby(eval_df.index // 600):
-            root_nodes = np.concatenate([rows.src.values, rows.dst.values, neg_link_sampler.sample(len(rows))]).astype(np.int32)
-            ts = np.concatenate([rows.time.values, rows.time.values, rows.time.values]).astype(np.float32)
+            root_nodes = np.concatenate([rows.src.values, rows.dst.values, neg_link_sampler.sample(len(rows) * neg_samples)]).astype(np.int32)
+            ts = np.tile(rows.time.values, neg_samples + 2).astype(np.float32)
             if sampler is not None:
                 if 'no_neg' in sample_param and sample_param['no_neg']:
-                    pos_root_end = root_nodes.shape[0] * 2 // 3
+                    pos_root_end = len(rows) * 2
                     sampler.sample(root_nodes[:pos_root_end], ts[:pos_root_end])
                 else:
                     sampler.sample(root_nodes, ts)
@@ -91,26 +93,32 @@ def eval(mode='val'):
             mfgs = prepare_input(mfgs, node_feats, edge_feats, combine_first=combine_first)
             if mailbox is not None:
                 mailbox.prep_input_mails(mfgs[0])
-            pred_pos, pred_neg = model(mfgs)
+            pred_pos, pred_neg = model(mfgs, neg_samples=neg_samples)
             total_loss += creterion(pred_pos, torch.ones_like(pred_pos))
             total_loss += creterion(pred_neg, torch.zeros_like(pred_neg))
             y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
             y_true = torch.cat([torch.ones(pred_pos.size(0)), torch.zeros(pred_neg.size(0))], dim=0)
             aps.append(average_precision_score(y_true, y_pred))
-            aucs.append(roc_auc_score(y_true, y_pred))
+            if neg_samples > 1:
+                aucs_mrrs.append(torch.reciprocal(torch.sum(pred_pos.squeeze() < pred_neg.squeeze().reshape(neg_samples, -1), dim=0) + 1).type(torch.float))
+            else:
+                aucs_mrrs.append(roc_auc_score(y_true, y_pred))
             if mailbox is not None:
                 eid = rows['Unnamed: 0'].values
                 mem_edge_feats = edge_feats[eid] if edge_feats is not None else None
                 block = None
                 if memory_param['deliver_to'] == 'neighbors':
                     block = to_dgl_blocks(ret, sample_param['history'], reverse=True)[0][0]
-                mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, root_nodes, ts, mem_edge_feats, block)
-                mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts)
+                mailbox.update_mailbox(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, root_nodes, ts, mem_edge_feats, block, neg_samples=neg_samples)
+                mailbox.update_memory(model.memory_updater.last_updated_nid, model.memory_updater.last_updated_memory, model.memory_updater.last_updated_ts, neg_samples=neg_samples)
         if mode == 'val':
             val_losses.append(float(total_loss))
     ap = float(torch.tensor(aps).mean())
-    auc = float(torch.tensor(aucs).mean())
-    return ap, auc
+    if neg_samples > 1:
+        auc_mrr = float(torch.cat(aucs_mrrs).mean())
+    else:
+        auc_mrr = float(torch.tensor(aucs_mrrs).mean())
+    return ap, auc_mrr
 
 if not os.path.isdir('models'):
     os.mkdir('models')
@@ -207,4 +215,7 @@ if mailbox is not None:
     eval('train')
     eval('val')
 ap, auc = eval('test')
-print('\ttest ap:{:4f}  test auc:{:4f}'.format(ap, auc))
+if args.eval_neg_samples > 1:
+    print('\ttest AP:{:4f}  test MRR:{:4f}'.format(ap, auc))
+else:
+    print('\ttest AP:{:4f}  test AUC:{:4f}'.format(ap, auc))

@@ -68,18 +68,21 @@ class MailBox():
                 b.dstdata['mem_input'] = self.mailbox[dst_id].cuda().reshape(dst_id.shape[0], -1)
                 b.dstdata['mail_ts'] = self.mailbox_ts[dst_id].cuda()
 
-    def update_memory(self, nid, memory, ts):
+    def update_memory(self, nid, memory, ts, neg_samples=1):
         if nid is None:
             return
+        num_true_src_dst = nid.shape[0] // (neg_samples + 2) * 2
+        # num_true_src_dst = nid.shape[0]
         with torch.no_grad():
-            nid = nid.to(self.device)
-            memory = memory.to(self.device)
-            ts = ts.to(self.device)
+            nid = nid[:num_true_src_dst].to(self.device)
+            memory = memory[:num_true_src_dst].to(self.device)
+            ts = ts[:num_true_src_dst].to(self.device)
             self.node_memory[nid.long()] = memory
             self.node_memory_ts[nid.long()] = ts
 
-    def update_mailbox(self, nid, memory, root_nodes, ts, edge_feats, block):
+    def update_mailbox(self, nid, memory, root_nodes, ts, edge_feats, block, neg_samples=1):
         with torch.no_grad():
+            num_true_edges = nid.shape[0] // (neg_samples + 2)
             memory = memory.to(self.device)
             if edge_feats is not None:
                 edge_feats = edge_feats.to(self.device)
@@ -87,10 +90,10 @@ class MailBox():
                 block = block.to(self.device)
             # TGN/JODIE
             if self.memory_param['deliver_to'] == 'self':
-                src = torch.from_numpy(root_nodes[:root_nodes.shape[0] // 3]).to(self.device)
-                dst = torch.from_numpy(root_nodes[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3]).to(self.device)
-                mem_src = memory[:root_nodes.shape[0] // 3]
-                mem_dst = memory[root_nodes.shape[0] // 3:root_nodes.shape[0] * 2 // 3]
+                src = torch.from_numpy(root_nodes[:num_true_edges]).to(self.device)
+                dst = torch.from_numpy(root_nodes[num_true_edges:num_true_edges * 2]).to(self.device)
+                mem_src = memory[:num_true_edges]
+                mem_dst = memory[num_true_edges:num_true_edges * 2]
                 if self.dim_edge_feat > 0:
                     src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
                     dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
@@ -99,7 +102,9 @@ class MailBox():
                     dst_mail = torch.cat([mem_dst, mem_src], dim=1)
                 mail = torch.cat([src_mail, dst_mail], dim=1).reshape(-1, src_mail.shape[1])
                 nid = torch.cat([src.unsqueeze(1), dst.unsqueeze(1)], dim=1).reshape(-1)
-                mail_ts = torch.from_numpy(ts[:ts.shape[0] * 2 // 3]).to(self.device)
+                mail_ts = torch.from_numpy(ts[:num_true_edges * 2]).to(self.device)
+                if mail_ts.dtype == torch.float64:
+                    import pdb; pdb.set_trace()
                 # find unique nid to update mailbox
                 uni, inv = torch.unique(nid, return_inverse=True)
                 perm = torch.arange(inv.size(0), dtype=inv.dtype, device=inv.device)
@@ -114,8 +119,8 @@ class MailBox():
                         self.next_mail_pos[nid.long()] = torch.remainder(self.next_mail_pos[nid.long()] + 1, self.memory_param['mailbox_size'])
             # APAN
             elif self.memory_param['deliver_to'] == 'neighbors':
-                mem_src = memory[:memory.shape[0] // 3]
-                mem_dst = memory[memory.shape[0] // 3:memory.shape[0] * 2 // 3]
+                mem_src = memory[:num_true_edges]
+                mem_dst = memory[num_true_edges:num_true_edges * 2]
                 if self.dim_edge_feat > 0:
                     src_mail = torch.cat([mem_src, mem_dst, edge_feats], dim=1)
                     dst_mail = torch.cat([mem_dst, mem_src, edge_feats], dim=1)
@@ -124,7 +129,7 @@ class MailBox():
                     dst_mail = torch.cat([mem_dst, mem_src], dim=1)
                 mail = torch.cat([src_mail, dst_mail], dim=0)
                 mail = torch.cat([mail, mail[block.edges()[0].long()]], dim=0)
-                mail_ts = torch.from_numpy(ts[:ts.shape[0] * 2 // 3]).to(self.device)
+                mail_ts = torch.from_numpy(ts[:num_true_edges * 2]).to(self.device)
                 mail_ts = torch.cat([mail_ts, mail_ts[block.edges()[0].long()]], dim=0)
                 if self.memory_param['mail_combine'] == 'mean':
                     (nid, idx) = torch.unique(block.dstdata['ID'], return_inverse=True)
