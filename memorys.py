@@ -51,28 +51,27 @@ class MailBox():
     def prep_input_mails(self, mfg, use_pinned_buffers=False):
         for i, b in enumerate(mfg):
             if use_pinned_buffers:
-                idx = b.srcdata['ID'].cpu().long()
+                # idx = b.srcdata['ID'].cpu().long()
                 dst_idx = idx[:b.num_dst_nodes()]
                 torch.index_select(self.node_memory, 0, idx, out=self.pinned_node_memory_buffs[i][:idx.shape[0]])
                 b.srcdata['mem'] = self.pinned_node_memory_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
-                torch.index_select(self.node_memory_ts, 0, dst_idx, out=self.pinned_node_memory_ts_buffs[i][:dst_idx.shape[0]])
-                b.dstdata['mem_ts'] = self.pinned_node_memory_ts_buffs[i][:dst_idx.shape[0]].cuda(non_blocking=True)
-                torch.index_select(self.mailbox, 0, dst_idx, out=self.pinned_mailbox_buffs[i][:dst_idx.shape[0]])
-                b.dstdata['mem_input'] = self.pinned_mailbox_buffs[i][:dst_idx.shape[0]].reshape(dst_idx.shape[0], -1).cuda(non_blocking=True)
-                torch.index_select(self.mailbox_ts, 0, dst_idx, out=self.pinned_mailbox_ts_buffs[i][:dst_idx.shape[0]])
-                b.dstdata['mail_ts'] = self.pinned_mailbox_ts_buffs[i][:dst_idx.shape[0]].cuda(non_blocking=True)
+                torch.index_select(self.node_memory_ts,0, idx, out=self.pinned_node_memory_ts_buffs[i][:idx.shape[0]])
+                b.srcdata['mem_ts'] = self.pinned_node_memory_ts_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
+                torch.index_select(self.mailbox, 0, idx, out=self.pinned_mailbox_buffs[i][:idx.shape[0]])
+                b.srcdata['mem_input'] = self.pinned_mailbox_buffs[i][:idx.shape[0]].reshape(b.srcdata['ID'].shape[0], -1).cuda(non_blocking=True)
+                torch.index_select(self.mailbox_ts, 0, idx, out=self.pinned_mailbox_ts_buffs[i][:idx.shape[0]])
+                b.srcdata['mail_ts'] = self.pinned_mailbox_ts_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
             else:
-                dst_id = b.srcdata['ID'][:b.num_dst_nodes()].long()
+                # dst_id = b.srcdata['ID'][:b.num_dst_nodes()].long()
                 b.srcdata['mem'] = self.node_memory[b.srcdata['ID'].long()].cuda()
-                b.dstdata['mem_ts'] = self.node_memory_ts[dst_id].cuda()
-                b.dstdata['mem_input'] = self.mailbox[dst_id].cuda().reshape(dst_id.shape[0], -1)
-                b.dstdata['mail_ts'] = self.mailbox_ts[dst_id].cuda()
+                b.srcdata['mem_ts'] = self.node_memory_ts[b.srcdata['ID'].long()].cuda()
+                b.srcdata['mem_input'] = self.mailbox[b.srcdata['ID'].long()].cuda().reshape(b.srcdata['ID'].shape[0], -1)
+                b.srcdata['mail_ts'] = self.mailbox_ts[b.srcdata['ID'].long()].cuda()
 
-    def update_memory(self, nid, memory, ts, neg_samples=1):
+    def update_memory(self, nid, memory, root_nodes, ts, neg_samples=1):
         if nid is None:
             return
-        num_true_src_dst = nid.shape[0] // (neg_samples + 2) * 2
-        # num_true_src_dst = nid.shape[0]
+        num_true_src_dst = root_nodes.shape[0] // (neg_samples + 2) * 2
         with torch.no_grad():
             nid = nid[:num_true_src_dst].to(self.device)
             memory = memory[:num_true_src_dst].to(self.device)
@@ -82,7 +81,7 @@ class MailBox():
 
     def update_mailbox(self, nid, memory, root_nodes, ts, edge_feats, block, neg_samples=1):
         with torch.no_grad():
-            num_true_edges = nid.shape[0] // (neg_samples + 2)
+            num_true_edges = root_nodes.shape[0] // (neg_samples + 2)
             memory = memory.to(self.device)
             if edge_feats is not None:
                 edge_feats = edge_feats.to(self.device)
@@ -185,21 +184,20 @@ class GRUMemeoryUpdater(torch.nn.Module):
     def forward(self, mfg):
         for b in mfg:
             if self.dim_time > 0:
-                time_feat = self.time_enc(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
-                b.dstdata['mem_input'] = torch.cat([b.dstdata['mem_input'], time_feat], dim=1)
-            updated_memory = self.updater(b.dstdata['mem_input'], b.srcdata['mem'][:b.num_dst_nodes()])
-            self.last_updated_ts = b.srcdata['ts'][:b.num_dst_nodes()].detach().clone()
+                time_feat = self.time_enc(b.srcdata['ts'] - b.srcdata['mem_ts'])
+                b.srcdata['mem_input'] = torch.cat([b.srcdata['mem_input'], time_feat], dim=1)
+            updated_memory = self.updater(b.srcdata['mem_input'], b.srcdata['mem'])
+            self.last_updated_ts = b.srcdata['ts'].detach().clone()
             self.last_updated_memory = updated_memory.detach().clone()
-            self.last_updated_nid = b.srcdata['ID'][:b.num_dst_nodes()].detach().clone()
-            new_memory = torch.cat([updated_memory,b.srcdata['mem'][b.num_dst_nodes():]], dim=0)
+            self.last_updated_nid = b.srcdata['ID'].detach().clone()
             if self.memory_param['combine_node_feature']:
                 if self.dim_node_feat > 0:
                     if self.dim_node_feat == self.dim_hid:
-                        b.srcdata['h'] += new_memory
+                        b.srcdata['h'] += updated_memory
                     else:
-                        b.srcdata['h'] = new_memory + self.node_feat_map(b.srcdata['h'])
+                        b.srcdata['h'] = updated_memory + self.node_feat_map(b.srcdata['h'])
                 else:
-                    b.srcdata['h'] = new_memory
+                    b.srcdata['h'] = updated_memory
 
 class RNNMemeoryUpdater(torch.nn.Module):
 
@@ -222,21 +220,20 @@ class RNNMemeoryUpdater(torch.nn.Module):
     def forward(self, mfg):
         for b in mfg:
             if self.dim_time > 0:
-                time_feat = self.time_enc(b.srcdata['ts'][:b.num_dst_nodes()] - b.dstdata['mem_ts'])
-                b.dstdata['mem_input'] = torch.cat([b.dstdata['mem_input'], time_feat], dim=1)
-            updated_memory = self.updater(b.dstdata['mem_input'], b.srcdata['mem'][:b.num_dst_nodes()])
-            self.last_updated_ts = b.srcdata['ts'][:b.num_dst_nodes()].detach().clone()
+                time_feat = self.time_enc(b.srcdata['ts'] - b.srcdata['mem_ts'])
+                b.srcdata['mem_input'] = torch.cat([b.srcdata['mem_input'], time_feat], dim=1)
+            updated_memory = self.updater(b.srcdata['mem_input'], b.srcdata['mem'])
+            self.last_updated_ts = b.srcdata['ts'].detach().clone()
             self.last_updated_memory = updated_memory.detach().clone()
-            self.last_updated_nid = b.srcdata['ID'][:b.num_dst_nodes()].detach().clone()
-            new_memory = torch.cat([updated_memory,b.srcdata['mem'][b.num_dst_nodes():]], dim=0)
+            self.last_updated_nid = b.srcdata['ID'].detach().clone()
             if self.memory_param['combine_node_feature']:
                 if self.dim_node_feat > 0:
                     if self.dim_node_feat == self.dim_hid:
-                        b.srcdata['h'] += new_memory
+                        b.srcdata['h'] += updated_memory
                     else:
-                        b.srcdata['h'] = new_memory + self.node_feat_map(b.srcdata['h'])
+                        b.srcdata['h'] = updated_memory + self.node_feat_map(b.srcdata['h'])
                 else:
-                    b.srcdata['h'] = new_memory
+                    b.srcdata['h'] = updated_memory
 
 class TransformerMemoryUpdater(torch.nn.Module):
 
@@ -262,9 +259,9 @@ class TransformerMemoryUpdater(torch.nn.Module):
     def forward(self, mfg):
         for b in mfg:
             Q = self.w_q(b.srcdata['mem']).reshape((b.num_src_nodes(), self.att_h, -1))
-            mails = b.dstdata['mem_input'].reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], -1))
+            mails = b.srcdata['mem_input'].reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], -1))
             if self.dim_time > 0:
-                time_feat = self.time_enc(b.srcdata['ts'][:, None] - b.dstdata['mail_ts']).reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], -1))
+                time_feat = self.time_enc(b.srcdata['ts'][:, None] - b.srcdata['mail_ts']).reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], -1))
                 mails = torch.cat([mails, time_feat], dim=2)
             K = self.w_k(mails).reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], self.att_h, -1))
             V = self.w_v(mails).reshape((b.num_src_nodes(), self.memory_param['mailbox_size'], self.att_h, -1))
