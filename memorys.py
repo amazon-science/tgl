@@ -51,7 +51,6 @@ class MailBox():
     def prep_input_mails(self, mfg, use_pinned_buffers=False):
         for i, b in enumerate(mfg):
             if use_pinned_buffers:
-                # idx = b.srcdata['ID'].cpu().long()
                 dst_idx = idx[:b.num_dst_nodes()]
                 torch.index_select(self.node_memory, 0, idx, out=self.pinned_node_memory_buffs[i][:idx.shape[0]])
                 b.srcdata['mem'] = self.pinned_node_memory_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
@@ -62,7 +61,6 @@ class MailBox():
                 torch.index_select(self.mailbox_ts, 0, idx, out=self.pinned_mailbox_ts_buffs[i][:idx.shape[0]])
                 b.srcdata['mail_ts'] = self.pinned_mailbox_ts_buffs[i][:idx.shape[0]].cuda(non_blocking=True)
             else:
-                # dst_id = b.srcdata['ID'][:b.num_dst_nodes()].long()
                 b.srcdata['mem'] = self.node_memory[b.srcdata['ID'].long()].cuda()
                 b.srcdata['mem_ts'] = self.node_memory_ts[b.srcdata['ID'].long()].cuda()
                 b.srcdata['mem_input'] = self.mailbox[b.srcdata['ID'].long()].cuda().reshape(b.srcdata['ID'].shape[0], -1)
