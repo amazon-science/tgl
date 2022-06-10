@@ -53,7 +53,7 @@ class GeneralModel(torch.nn.Module):
             for h in range(self.sample_param['history']):
                 rst = self.layers['l' + str(l) + 'h' + str(h)](mfgs[l][h])
                 if 'time_transform' in self.gnn_param and self.gnn_param['time_transform'] == 'JODIE':
-                    rst = self.layers['l0h' + str(h) + 't'](rst, mfgs[l][h].dstdata['mem_ts'], mfgs[l][h].srcdata['ts'])
+                    rst = self.layers['l0h' + str(h) + 't'](rst, mfgs[l][h].srcdata['mem_ts'], mfgs[l][h].srcdata['ts'])
                 if l != self.gnn_param['layer'] - 1:
                     mfgs[l + 1][h].srcdata['h'] = rst
                 else:
