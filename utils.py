@@ -139,10 +139,13 @@ def get_ids(mfgs, node_feats, edge_feats):
     if node_feats is not None:
         for b in mfgs[0]:
             nids.append(b.srcdata['ID'].long())
-    if edge_feats is not None:
-        for mfg in mfgs:
-            for b in mfg:
-                eids.append(b.edata['ID'].long())
+    if 'ID' in mfgs[0][0].edata:
+        if edge_feats is not None:
+            for mfg in mfgs:
+                for b in mfg:
+                    eids.append(b.edata['ID'].long())
+    else:
+        eids = None
     return nids, eids
 
 def get_pinned_buffers(sample_param, batch_size, node_feats, edge_feats):

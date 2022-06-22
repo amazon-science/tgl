@@ -243,7 +243,7 @@ if args.local_rank < args.num_gpus:
                         ts = prev_thread.get_ts()
                         block = prev_thread.get_block()
                         mailbox.update_mailbox(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, ts, mem_edge_feats, block)
-                        mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, model.module.memory_updater.last_updated_ts)
+                        mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, model.module.memory_updater.last_updated_ts)
                         if memory_param['deliver_to'] == 'neighbors':
                             torch.distributed.barrier(group=nccl_group)
                             if args.local_rank == 0:
@@ -292,7 +292,7 @@ if args.local_rank < args.num_gpus:
                         ts = prev_thread.get_ts()
                         block = prev_thread.get_block()
                         mailbox.update_mailbox(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, ts, mem_edge_feats, block)
-                        mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, model.module.memory_updater.last_updated_ts)
+                        mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, model.module.memory_updater.last_updated_ts)
                         if memory_param['deliver_to'] == 'neighbors':
                             torch.distributed.barrier(group=nccl_group)
                             if args.local_rank == 0:
@@ -329,7 +329,7 @@ if args.local_rank < args.num_gpus:
                         torch.distributed.scatter_object_list(my_block, multi_block, src=args.num_gpus)
                         block = my_block[0]
                     mailbox.update_mailbox(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, ts, mem_edge_feats, block)
-                    mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, model.module.memory_updater.last_updated_ts)
+                    mailbox.update_memory(model.module.memory_updater.last_updated_nid, model.module.memory_updater.last_updated_memory, root_nodes, model.module.memory_updater.last_updated_ts)
                     if memory_param['deliver_to'] == 'neighbors':
                         torch.distributed.barrier(group=nccl_group)
                         if args.local_rank == 0:
