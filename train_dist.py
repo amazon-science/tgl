@@ -361,7 +361,7 @@ else:
             eval_df = df[:train_edge_end]
         ap_tot = list()
         auc_tot = list()
-        train_param['bathc_size'] = orig_batch_size
+        train_param['batch_size'] = orig_batch_size
         itr_tot = max(len(eval_df) // train_param['batch_size'] // args.num_gpus, 1) * args.num_gpus
         train_param['batch_size'] = math.ceil(len(eval_df) / itr_tot)
         multi_mfgs = list()
@@ -439,7 +439,7 @@ else:
         if mailbox is not None:
             mailbox.reset()
         # training
-        train_param['bathc_size'] = orig_batch_size
+        train_param['batch_size'] = orig_batch_size
         itr_tot = train_edge_end // train_param['batch_size'] // args.num_gpus * args.num_gpus
         train_param['batch_size'] = math.ceil(train_edge_end / itr_tot)
         multi_mfgs = list()
