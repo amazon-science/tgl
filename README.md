@@ -21,7 +21,7 @@ Our temporal sampler is implemented using C++, please compile the sampler first 
 
 ## Dataset
 
-[2022/06/22] We noticed that we uploaded the wrong version of the GDELT dataset and have uploaded the correct version. Please re-download all the files in the GDELT folder. Sorry of any inconvenience created.
+[2022/06/29] We noticed that we uploaded the wrong version of the GDELT dataset and have uploaded the correct version. Please re-download all the files in the GDELT folder. Sorry of any inconvenience created.
 
 The four datasets used in our paper are available to download from AWS S3 bucket using the `down.sh` script. The total download size is around 350GB.
 
