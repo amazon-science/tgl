@@ -69,6 +69,7 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 If you use TGL in a scientific publication, we would appreciate citations to the following paper:
 
+```
 @article{zhou2022tgl,
     title={{TGL}: A General Framework for Temporal GNN Training on Billion-Scale Graphs},
     author={Zhou, Hongkuan and Zheng, Da and Nisa, Israt and Ioannidis, Vasileios and Song, Xiang and Karypis, George},
@@ -77,6 +78,7 @@ If you use TGL in a scientific publication, we would appreciate citations to the
     volume = {15},
     number = {8},
 }
+```
 
 ## License
 
