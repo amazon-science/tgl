@@ -65,6 +65,19 @@ After generating the node embeding for multi-GPU models, run
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
+## Cite
+
+If you use TGL in a scientific publication, we would appreciate citations to the following paper:
+
+@article{zhou2022tgl,
+    title={{TGL}: A General Framework for Temporal GNN Training on Billion-Scale Graphs},
+    author={Zhou, Hongkuan and Zheng, Da and Nisa, Israt and Ioannidis, Vasileios and Song, Xiang and Karypis, George},
+    year = {2022},
+    journal = {Proc. VLDB Endow.},
+    volume = {15},
+    number = {8},
+}
+
 ## License
 
 This project is licensed under the Apache-2.0 License.
