@@ -295,7 +295,7 @@ class ParallelSampler
                         if ((recent) || (e_search - s_search < neighs))
                         {                            
                             // no sampling, pick recent neighbors
-                            for (EdgeIDType k = e_search; k > std::max(s_search, e_search - neighs); k--)
+                            for (EdgeIDType k = e_search; k >= std::max(s_search, e_search - neighs + 1); k--)
                             {
                                 if (ts[k] < nts + offset - 1e-7f)
                                 {
