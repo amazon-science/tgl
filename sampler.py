@@ -15,6 +15,13 @@ class NegLinkSampler:
     def sample(self, n):
         return np.random.randint(self.num_nodes, size=n)
 
+class NegLinkInductiveSampler:
+    def __init__(self, nodes):
+        self.nodes = list(nodes)
+
+    def sample(self, n):
+        return np.random.choice(self.nodes, size=n)
+    
 if __name__ == '__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--data', type=str, help='dataset name')

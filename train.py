@@ -6,6 +6,7 @@ parser.add_argument('--data', type=str, help='dataset name')
 parser.add_argument('--config', type=str, help='path to config file')
 parser.add_argument('--gpu', type=str, default='0', help='which GPU to use')
 parser.add_argument('--model_name', type=str, default='', help='name of stored model')
+parser.add_argument('--use_inductive', action='store_true')
 parser.add_argument('--rand_edge_features', type=int, default=0, help='use random edge featrues')
 parser.add_argument('--rand_node_features', type=int, default=0, help='use random node featrues')
 parser.add_argument('--eval_neg_samples', type=int, default=1, help='how many negative samples to use at inference. Note: this will change the metric of test set to AP+AUC to AP+MRR!')
@@ -37,6 +38,28 @@ sample_param, memory_param, gnn_param, train_param = parse_config(args.config)
 train_edge_end = df[df['ext_roll'].gt(0)].index[0]
 val_edge_end = df[df['ext_roll'].gt(1)].index[0]
 
+def get_inductive_links(df, train_edge_end, val_edge_end):
+    train_df = df[:train_edge_end]
+    test_df = df[val_edge_end:]
+    
+    total_node_set = set(np.unique(np.hstack([df['src'].values, df['dst'].values])))
+    train_node_set = set(np.unique(np.hstack([train_df['src'].values, train_df['dst'].values])))
+    new_node_set = total_node_set - train_node_set
+    
+    del total_node_set, train_node_set
+
+    inductive_inds = []
+    for index, (_, row) in enumerate(test_df.iterrows()):
+        if row.src in new_node_set or row.dst in new_node_set:
+            inductive_inds.append(val_edge_end+index)
+    
+    print('Inductive links', len(inductive_inds), len(test_df))
+    return [i for i in range(val_edge_end)] + inductive_inds
+
+if args.use_inductive:
+    inductive_inds = get_inductive_links(df, train_edge_end, val_edge_end)
+    df = df.iloc[inductive_inds]
+    
 gnn_dim_node = 0 if node_feats is None else node_feats.shape[1]
 gnn_dim_edge = 0 if edge_feats is None else edge_feats.shape[1]
 combine_first = False
@@ -60,7 +83,14 @@ if not ('no_sample' in sample_param and sample_param['no_sample']):
                               sample_param['num_thread'], 1, sample_param['layer'], sample_param['neighbor'],
                               sample_param['strategy']=='recent', sample_param['prop_time'],
                               sample_param['history'], float(sample_param['duration']))
-neg_link_sampler = NegLinkSampler(g['indptr'].shape[0] - 1)
+
+if args.use_inductive:
+    test_df = df[val_edge_end:]
+    inductive_nodes = set(test_df.src.values).union(test_df.src.values)
+    print("inductive nodes", len(inductive_nodes))
+    neg_link_sampler = NegLinkInductiveSampler(inductive_nodes)
+else:
+    neg_link_sampler = NegLinkSampler(g['indptr'].shape[0] - 1)
 
 def eval(mode='val'):
     neg_samples = 1
