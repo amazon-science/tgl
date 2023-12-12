@@ -144,12 +144,12 @@ class DataPipelineThread(threading.Thread):
             prepare_input(mfgs, node_feats, edge_feats, pinned=True, nfeat_buffs=pinned_nfeat_buffs, efeat_buffs=pinned_efeat_buffs, nids=nids, eids=eids)
             if mailbox is not None:
                 mailbox.prep_input_mails(mfgs[0], use_pinned_buffers=True)
-                self.mfgs = mfgs
-                self.root = self.my_root[0]
-                self.ts = self.my_ts[0]
-                self.eid = self.my_eid[0]
                 if memory_param['deliver_to'] == 'neighbors':
                     self.block = self.my_block[0]
+            self.mfgs = mfgs
+            self.root = self.my_root[0]
+            self.ts = self.my_ts[0]
+            self.eid = self.my_eid[0]
             # print(args.local_rank, 'finished')
 
     def get_stream(self):
