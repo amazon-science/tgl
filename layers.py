@@ -99,7 +99,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
             att = self.att_dropout(att)
             V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
             b.edata['v'] = V
-            b.update_all(dgl.function.copy_edge('v', 'm'), dgl.function.sum('m', 'h'))
+            b.update_all(dgl.function.copy_e('v', 'm'), dgl.function.sum('m', 'h'))
         else:
             if self.dim_time == 0 and self.dim_node_feat == 0:
                 Q = torch.ones((b.num_edges(), self.dim_out), device=torch.device('cuda:0'))
@@ -132,7 +132,7 @@ class TransfomerAttentionLayer(torch.nn.Module):
             att = self.att_dropout(att)
             V = torch.reshape(V*att[:, :, None], (V.shape[0], -1))
             b.srcdata['v'] = torch.cat([torch.zeros((b.num_dst_nodes(), V.shape[1]), device=torch.device('cuda:0')), V], dim=0)
-            b.update_all(dgl.function.copy_src('v', 'm'), dgl.function.sum('m', 'h'))
+            b.update_all(dgl.function.copy_u('v', 'm'), dgl.function.sum('m', 'h'))
         if self.dim_node_feat != 0:
             rst = torch.cat([b.dstdata['h'], b.srcdata['h'][:b.num_dst_nodes()]], dim=1)
         else:
